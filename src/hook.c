@@ -374,7 +374,7 @@ static VOID Unfreeze(PFROZEN_THREADS pThreads)
 }
 
 //-------------------------------------------------------------------------
-static MH_STATUS EnableHookLL(UINT pos, BOOL enable)
+static MH_STATUS EnableHookLL(UINT pos, BOOL enable, BOOL WriteCopy)
 {
     PHOOK_ENTRY pHook = &g_hooks.pItems[pos];
     DWORD  oldProtect;
@@ -387,8 +387,17 @@ static MH_STATUS EnableHookLL(UINT pos, BOOL enable)
         patchSize    += sizeof(JMP_REL_SHORT);
     }
 
-    if (!VirtualProtect(pPatchTarget, patchSize, PAGE_EXECUTE_READWRITE, &oldProtect))
-        return MH_ERROR_MEMORY_PROTECT;
+    if (WriteCopy == FALSE)
+    {
+        if (!VirtualProtect(pPatchTarget, patchSize, PAGE_EXECUTE_READWRITE, &oldProtect))
+            return MH_ERROR_MEMORY_PROTECT;
+    }
+
+    if (WriteCopy == TRUE)
+    {
+        if (!VirtualProtect(pPatchTarget, patchSize, PAGE_EXECUTE_WRITECOPY, &oldProtect))
+            return MH_ERROR_MEMORY_PROTECT;
+    }
 
     if (enable)
     {
@@ -423,7 +432,7 @@ static MH_STATUS EnableHookLL(UINT pos, BOOL enable)
 }
 
 //-------------------------------------------------------------------------
-static MH_STATUS EnableAllHooksLL(BOOL enable)
+static MH_STATUS EnableAllHooksLL(BOOL enable, BOOL WriteCopy)
 {
     MH_STATUS status = MH_OK;
     UINT i, first = INVALID_HOOK_POS;
@@ -447,7 +456,7 @@ static MH_STATUS EnableAllHooksLL(BOOL enable)
             {
                 if (g_hooks.pItems[i].isEnabled != enable)
                 {
-                    status = EnableHookLL(i, enable);
+                    status = EnableHookLL(i, enable, WriteCopy);
                     if (status != MH_OK)
                         break;
                 }
@@ -461,7 +470,7 @@ static MH_STATUS EnableAllHooksLL(BOOL enable)
 }
 
 //-------------------------------------------------------------------------
-static VOID EnterSpinLock(VOID)
+static VOID EnterSpinLock()
 {
     SIZE_T spinCount = 0;
 
@@ -482,7 +491,7 @@ static VOID EnterSpinLock(VOID)
 }
 
 //-------------------------------------------------------------------------
-static VOID LeaveSpinLock(VOID)
+static VOID LeaveSpinLock()
 {
     // No need to generate a memory barrier here, since InterlockedExchange()
     // generates a full memory barrier itself.
@@ -491,7 +500,7 @@ static VOID LeaveSpinLock(VOID)
 }
 
 //-------------------------------------------------------------------------
-MH_STATUS WINAPI MH_Initialize(VOID)
+MH_STATUS WINAPI MH_Initialize()
 {
     MH_STATUS status = MH_OK;
 
@@ -521,7 +530,7 @@ MH_STATUS WINAPI MH_Initialize(VOID)
 }
 
 //-------------------------------------------------------------------------
-MH_STATUS WINAPI MH_Uninitialize(VOID)
+MH_STATUS WINAPI MH_Uninitialize(BOOL WriteCopy)
 {
     MH_STATUS status = MH_OK;
 
@@ -529,7 +538,7 @@ MH_STATUS WINAPI MH_Uninitialize(VOID)
 
     if (g_hHeap != NULL)
     {
-        status = EnableAllHooksLL(FALSE);
+        status = EnableAllHooksLL(FALSE, WriteCopy);
         if (status == MH_OK)
         {
             // Free the internal function buffer.
@@ -658,7 +667,7 @@ MH_STATUS WINAPI MH_CreateHook(LPVOID pTarget, LPVOID pDetour, LPVOID *ppOrigina
 }
 
 //-------------------------------------------------------------------------
-MH_STATUS WINAPI MH_RemoveHook(LPVOID pTarget)
+MH_STATUS WINAPI MH_RemoveHook(LPVOID pTarget, BOOL WriteCopy)
 {
     MH_STATUS status = MH_OK;
 
@@ -675,7 +684,7 @@ MH_STATUS WINAPI MH_RemoveHook(LPVOID pTarget)
                 status = Freeze(&threads, pos, ACTION_DISABLE);
                 if (status == MH_OK)
                 {
-                    status = EnableHookLL(pos, FALSE);
+                    status = EnableHookLL(pos, FALSE, WriteCopy);
 
                     Unfreeze(&threads);
                 }
@@ -703,7 +712,7 @@ MH_STATUS WINAPI MH_RemoveHook(LPVOID pTarget)
 }
 
 //-------------------------------------------------------------------------
-static MH_STATUS EnableHook(LPVOID pTarget, BOOL enable)
+static MH_STATUS EnableHook(LPVOID pTarget, BOOL enable, BOOL WriteCopy)
 {
     MH_STATUS status = MH_OK;
 
@@ -713,7 +722,7 @@ static MH_STATUS EnableHook(LPVOID pTarget, BOOL enable)
     {
         if (pTarget == MH_ALL_HOOKS)
         {
-            status = EnableAllHooksLL(enable);
+            status = EnableAllHooksLL(enable, WriteCopy);
         }
         else
         {
@@ -726,7 +735,7 @@ static MH_STATUS EnableHook(LPVOID pTarget, BOOL enable)
                     status = Freeze(&threads, pos, ACTION_ENABLE);
                     if (status == MH_OK)
                     {
-                        status = EnableHookLL(pos, enable);
+                        status = EnableHookLL(pos, enable, WriteCopy);
 
                         Unfreeze(&threads);
                     }
@@ -753,15 +762,15 @@ static MH_STATUS EnableHook(LPVOID pTarget, BOOL enable)
 }
 
 //-------------------------------------------------------------------------
-MH_STATUS WINAPI MH_EnableHook(LPVOID pTarget)
+MH_STATUS WINAPI MH_EnableHook(LPVOID pTarget, BOOL WriteCopy)
 {
-    return EnableHook(pTarget, TRUE);
+    return EnableHook(pTarget, TRUE, WriteCopy);
 }
 
 //-------------------------------------------------------------------------
-MH_STATUS WINAPI MH_DisableHook(LPVOID pTarget)
+MH_STATUS WINAPI MH_DisableHook(LPVOID pTarget, BOOL WriteCopy)
 {
-    return EnableHook(pTarget, FALSE);
+    return EnableHook(pTarget, FALSE, WriteCopy);
 }
 
 //-------------------------------------------------------------------------
@@ -815,7 +824,7 @@ MH_STATUS WINAPI MH_QueueDisableHook(LPVOID pTarget)
 }
 
 //-------------------------------------------------------------------------
-MH_STATUS WINAPI MH_ApplyQueued(VOID)
+MH_STATUS WINAPI MH_ApplyQueued(BOOL WriteCopy)
 {
     MH_STATUS status = MH_OK;
     UINT i, first = INVALID_HOOK_POS;
@@ -844,7 +853,7 @@ MH_STATUS WINAPI MH_ApplyQueued(VOID)
                     PHOOK_ENTRY pHook = &g_hooks.pItems[i];
                     if (pHook->isEnabled != pHook->queueEnable)
                     {
-                        status = EnableHookLL(i, pHook->queueEnable);
+                        status = EnableHookLL(i, pHook->queueEnable, WriteCopy);
                         if (status != MH_OK)
                             break;
                     }
