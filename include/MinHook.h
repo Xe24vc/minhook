@@ -93,11 +93,11 @@ extern "C" {
 
     // Initialize the MinHook library. You must call this function EXACTLY ONCE
     // at the beginning of your program.
-    MH_STATUS WINAPI MH_Initialize(VOID);
+    MH_STATUS WINAPI MH_Initialize();
 
     // Uninitialize the MinHook library. You must call this function EXACTLY
     // ONCE at the end of your program.
-    MH_STATUS WINAPI MH_Uninitialize(VOID);
+    MH_STATUS WINAPI MH_Uninitialize(BOOL WriteCopy);
 
     // Creates a hook for the specified target function, in disabled state.
     // Parameters:
@@ -144,21 +144,21 @@ extern "C" {
     // Removes an already created hook.
     // Parameters:
     //   pTarget [in] A pointer to the target function.
-    MH_STATUS WINAPI MH_RemoveHook(LPVOID pTarget);
+    MH_STATUS WINAPI MH_RemoveHook(LPVOID pTarget, BOOL WriteCopy);
 
     // Enables an already created hook.
     // Parameters:
     //   pTarget [in] A pointer to the target function.
     //                If this parameter is MH_ALL_HOOKS, all created hooks are
     //                enabled in one go.
-    MH_STATUS WINAPI MH_EnableHook(LPVOID pTarget);
+    MH_STATUS WINAPI MH_EnableHook(LPVOID pTarget, BOOL WriteCopy);
 
     // Disables an already created hook.
     // Parameters:
     //   pTarget [in] A pointer to the target function.
     //                If this parameter is MH_ALL_HOOKS, all created hooks are
     //                disabled in one go.
-    MH_STATUS WINAPI MH_DisableHook(LPVOID pTarget);
+    MH_STATUS WINAPI MH_DisableHook(LPVOID pTarget, BOOL WriteCopy);
 
     // Queues to enable an already created hook.
     // Parameters:
@@ -175,7 +175,7 @@ extern "C" {
     MH_STATUS WINAPI MH_QueueDisableHook(LPVOID pTarget);
 
     // Applies all queued changes in one go.
-    MH_STATUS WINAPI MH_ApplyQueued(VOID);
+    MH_STATUS WINAPI MH_ApplyQueued(BOOL WriteCopy);
 
     // Translates the MH_STATUS to its name as a string.
     const char * WINAPI MH_StatusToString(MH_STATUS status);
